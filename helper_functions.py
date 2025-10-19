@@ -30,6 +30,15 @@ def rank_list(preds):
     return ranks
 
 
+def rank_by_original_index(preds):
+    """
+    Returns a dict mapping each document's original _index to its rank.
+    Assumes preds are already sorted by _score descending.
+    """
+    return np.array([p["_index"] for p in preds])
+
+
+
 # def rank_list(vector):
 #     """
 #     returns ndarray containing rank(i) for documents at position i
@@ -136,7 +145,19 @@ try:
 except Exception:
     _default_stemmer = lambda w: w  # no-op fallback if NLTK not available
 
-_TOKEN_PATTERN = re.compile(r"\w+|\s+|[^\w\s]")  # words | spaces | punctuation
+
+# --- helpers 
+_WORD = r"[A-Za-z]+(?:[-'][A-Za-z]+)*"          # handles hyphenated words & apostrophes: policy-maker, bank's
+_PLACEHOLDER = r"__PHRASE_\d+__"
+_PUNCT = r"[^\w\s]"                             # any single non-word, non-space (.,;:!?()[]{}"”’ etc.)
+_NUMBER = r"\d+(?:[.,]\d+)*%?|\$\d+(?:[.,]\d+)*"
+_TOKEN_PATTERN = re.compile(fr"{_PLACEHOLDER}|{_WORD}|{_PUNCT}|{_NUMBER}")
+
+# def tokenize(text: str):
+#     # Returns a list of tokens: words/placeholders/punctuation
+#     return TOKEN_RX.findall(text)
+
+# _TOKEN_PATTERN = re.compile(r"\w+|\s+|[^\w\s]")  # words | spaces | punctuation
 
 def replace_words_in_sentences(
     documents: Iterable[str],
@@ -172,9 +193,23 @@ def replace_words_in_sentences(
                     pieces.append(tok)
             else:
                 pieces.append(tok)
-        out.append("".join(pieces))
+        # out.append(" ".join(pieces))
+        out.append(detokenize(pieces))
     return out
 
+def detokenize(tokens):
+    out = []
+    for t in tokens:
+        if not out:
+            out.append(t)
+            continue
+        # If current token is punctuation, attach to previous without space
+        if re.fullmatch(_PUNCT, t):
+            out[-1] += t
+        else:
+            # otherwise add a space then the token
+            out.append(" " + t)
+    return "".join(out)
 
 
 
